@@ -17,6 +17,7 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.op.banktransactiontracker.data.TransactionEntity
 import com.op.banktransactiontracker.databinding.ActivityMainBinding
 import com.op.banktransactiontracker.databinding.DialogAddEditTransactionBinding
@@ -26,8 +27,9 @@ import com.op.banktransactiontracker.ui.TransactionAdapter
 import com.op.banktransactiontracker.ui.TransactionViewModel
 import com.op.banktransactiontracker.ui.TransactionViewModelFactory
 import com.op.banktransactiontracker.utils.DateUtils
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import java.text.NumberFormat
 import java.util.Calendar
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -38,6 +40,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var transactionAdapter: TransactionAdapter
     private var currentPhoneList: List<String> = emptyList()
+    private val numberFormat = NumberFormat.getNumberInstance(Locale("fa"))
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -109,6 +112,7 @@ class MainActivity : AppCompatActivity() {
             transactionAdapter.submitList(list)
             binding.tvEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
             binding.recyclerView.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+            updateTotals(list)
         }
 
         viewModel.phoneNumbers.observe(this) { phones ->
@@ -116,8 +120,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // -------------------- دیالوگ‌ها --------------------
+    private fun updateTotals(list: List<TransactionEntity>) {
+        var totalDeposit = 0L
+        var totalWithdrawal = 0L
 
+        for (item in list) {
+            if (item.type == "deposit") {
+                totalDeposit += item.amount
+            } else {
+                totalWithdrawal += item.amount
+            }
+        }
+
+        binding.tvTotalDeposit.text = "واریز: ${numberFormat.format(totalDeposit)} ریال"
+        binding.tvTotalWithdrawal.text = "برداشت: ${numberFormat.format(totalWithdrawal)} ریال"
+    }
+
+    private fun detectType(message: String, fallback: String?): String {
+        val text = message
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+        val hasDeposit = text.contains(Regex("واریز|افزایش موجودی|واریز وجه", RegexOption.IGNORE_CASE))
+        val hasWithdrawal = text.contains(Regex("برداشت|خرید|پرداخت|کسر|منفی", RegexOption.IGNORE_CASE))
+
+        return when {
+            hasDeposit && !hasWithdrawal -> "deposit"
+            hasWithdrawal && !hasDeposit -> "withdrawal"
+            else -> fallback ?: "withdrawal"
+        }
+    }
+
+    private fun showTypeSelectionDialog(message: String, fallbackType: String, onTypeSelected: (String) -> Unit) {
+        val options = arrayOf("واریز", "برداشت")
+        MaterialAlertDialogBuilder(this)
+            .setTitle("نوع تراکنش")
+            .setItems(options) { _, index ->
+                val type = if (index == 0) "deposit" else "withdrawal"
+                onTypeSelected(type)
+            }
+            .setNegativeButton("لغو", null)
+            .show()
+    }
     private fun showAddEditDialog(existing: TransactionEntity?) {
         val dialogBinding = DialogAddEditTransactionBinding.inflate(LayoutInflater.from(this))
         val isEdit = existing != null
@@ -125,7 +171,10 @@ class MainActivity : AppCompatActivity() {
         if (isEdit) {
             dialogBinding.etPhone.setText(existing!!.phoneNumber)
             dialogBinding.etSenderName.setText(existing.senderName)
-            dialogBinding.etMessage.setText(existing.messageBody)
+            // در فیلد مبلغ فقط عدد نمایش داده شود
+            dialogBinding.etMessage.setText(
+                if (existing.amount > 0) existing.amount.toString() else ""
+            )
             dialogBinding.etTitle.setText(existing.title)
             dialogBinding.etDescription.setText(existing.description)
         }
@@ -136,35 +185,66 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(if (isEdit) "ذخیره" else "افزودن") { _, _ ->
                 val phone = dialogBinding.etPhone.text.toString().trim()
                 val sender = dialogBinding.etSenderName.text.toString().trim()
-                val message = dialogBinding.etMessage.text.toString().trim()
+                val amountText = dialogBinding.etMessage.text.toString().trim()
+                    .replace(",", "")
+                    .replace("٬", "")
+                    .replace(" ", "")
                 val title = dialogBinding.etTitle.text.toString().trim().ifBlank { "دستی" }
                 val description = dialogBinding.etDescription.text.toString().trim()
 
-                if (phone.isBlank() || message.isBlank()) {
-                    Toast.makeText(this, "شماره و متن پیام الزامی است", Toast.LENGTH_SHORT).show()
+                if (phone.isBlank()) {
+                    Toast.makeText(this, "شماره الزامی است", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
 
-                if (isEdit) {
-                    val updated = existing!!.copy(
-                        phoneNumber = phone,
-                        senderName = sender.ifBlank { phone },
-                        messageBody = message,
-                        title = title,
-                        description = description
-                    )
-                    viewModel.updateTransaction(updated)
-                } else {
-                    val newItem = TransactionEntity(
-                        dateTime = System.currentTimeMillis(),
-                        senderName = sender.ifBlank { phone },
-                        phoneNumber = phone,
-                        messageBody = message,
-                        title = title,
-                        description = description
-                    )
-                    viewModel.insertTransaction(newItem)
+                val amount = amountText.toLongOrNull() ?: 0L
+                if (amount <= 0) {
+                    Toast.makeText(this, "مبلغ را درست وارد کنید", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
                 }
+
+                // انتخاب نوع توسط کاربر
+                val options = arrayOf("واریز", "برداشت")
+                val defaultIndex = if (existing?.type == "deposit") 0 else 1
+
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("نوع تراکنش")
+                    .setSingleChoiceItems(options, defaultIndex, null)
+                    .setPositiveButton("تأیید") { dialog, _ ->
+                        val listView = (dialog as androidx.appcompat.app.AlertDialog).listView
+                        val selected = listView.checkedItemPosition
+                        val type = if (selected == 0) "deposit" else "withdrawal"
+
+                        // messageBody فقط مبلغ ذخیره شود تا در محاسبات مشکلی نباشد
+                        val messageBody = amount.toString()
+
+                        if (isEdit) {
+                            val updated = existing!!.copy(
+                                phoneNumber = phone,
+                                senderName = sender.ifBlank { phone },
+                                messageBody = messageBody,
+                                title = title,
+                                description = description,
+                                type = type,
+                                amount = amount
+                            )
+                            viewModel.updateTransaction(updated)
+                        } else {
+                            val newItem = TransactionEntity(
+                                dateTime = System.currentTimeMillis(),
+                                senderName = sender.ifBlank { phone },
+                                phoneNumber = phone,
+                                messageBody = messageBody,
+                                title = title,
+                                description = description,
+                                type = type,
+                                amount = amount
+                            )
+                            viewModel.insertTransaction(newItem)
+                        }
+                    }
+                    .setNegativeButton("لغو", null)
+                    .show()
             }
             .setNegativeButton("لغو", null)
             .show()
@@ -239,14 +319,12 @@ class MainActivity : AppCompatActivity() {
     private fun showCustomDateRangeDialog() {
         val calendar = Calendar.getInstance()
 
-        // تاریخ شروع
         DatePickerDialog(
             this,
             { _, year, month, day ->
                 calendar.set(year, month, day)
                 val from = DateUtils.getStartOfDay(calendar.timeInMillis)
 
-                // تاریخ پایان
                 DatePickerDialog(
                     this,
                     { _, y2, m2, d2 ->
@@ -283,7 +361,6 @@ class MainActivity : AppCompatActivity() {
         dialogBinding.rvPhones.layoutManager = LinearLayoutManager(this)
         dialogBinding.rvPhones.adapter = phoneAdapter
 
-        // مشاهده لیست زنده
         viewModel.phoneNumbers.observe(this) { phones ->
             phoneAdapter.submitList(phones.toList().sorted())
         }
@@ -305,7 +382,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // -------------------- مجوزها --------------------
+
 
     private fun checkPermissions() {
         val permissions = mutableListOf(

@@ -1,5 +1,6 @@
 package com.op.banktransactiontracker.ui
 
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,11 +10,15 @@ import androidx.recyclerview.widget.RecyclerView
 import com.op.banktransactiontracker.data.TransactionEntity
 import com.op.banktransactiontracker.databinding.ItemTransactionBinding
 import com.op.banktransactiontracker.utils.DateUtils
+import java.text.NumberFormat
+import java.util.Locale
 
 class TransactionAdapter(
     private val onEditClick: (TransactionEntity) -> Unit,
     private val onDeleteClick: (TransactionEntity) -> Unit
 ) : ListAdapter<TransactionEntity, TransactionAdapter.ViewHolder>(DiffCallback()) {
+
+    private val numberFormat = NumberFormat.getNumberInstance(Locale("fa"))
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemTransactionBinding.inflate(
@@ -33,13 +38,33 @@ class TransactionAdapter(
             binding.tvSender.text = item.senderName.ifBlank { item.phoneNumber }
             binding.tvDate.text = DateUtils.formatDateTime(item.dateTime)
             binding.tvTitle.text = item.title
-            binding.tvMessage.text = item.messageBody
+
+            val isDeposit = item.type == "deposit"
+            val typeLabel = if (isDeposit) "واریز" else "برداشت"
+            val typeColor = if (isDeposit) Color.parseColor("#2E7D32") else Color.parseColor("#C62828")
+            val bgColor = if (isDeposit) Color.parseColor("#E8F5E9") else Color.parseColor("#FFEBEE")
+
+            binding.tvType.text = typeLabel
+            binding.tvType.setTextColor(typeColor)
+            binding.tvType.setBackgroundColor(bgColor)
+
+            if (item.amount > 0) {
+                binding.tvAmount.visibility = View.VISIBLE
+                binding.tvAmount.text = "${numberFormat.format(item.amount)} ریال"
+                binding.tvAmount.setTextColor(typeColor)
+            } else {
+                binding.tvAmount.visibility = View.GONE
+            }
 
             if (item.description.isBlank()) {
                 binding.tvDescription.visibility = View.GONE
             } else {
                 binding.tvDescription.visibility = View.VISIBLE
-                binding.tvDescription.text = "برداشت از :   " +item.description
+                binding.tvDescription.text = if (isDeposit) {
+                    "واریز به :   ${item.description}"
+                } else {
+                    "برداشت از :   ${item.description}"
+                }
             }
 
             binding.btnEdit.setOnClickListener { onEditClick(item) }
@@ -48,10 +73,7 @@ class TransactionAdapter(
     }
 
     class DiffCallback : DiffUtil.ItemCallback<TransactionEntity>() {
-        override fun areItemsTheSame(old: TransactionEntity, new: TransactionEntity) =
-            old.id == new.id
-
-        override fun areContentsTheSame(old: TransactionEntity, new: TransactionEntity) =
-            old == new
+        override fun areItemsTheSame(old: TransactionEntity, new: TransactionEntity) = old.id == new.id
+        override fun areContentsTheSame(old: TransactionEntity, new: TransactionEntity) = old == new
     }
 }

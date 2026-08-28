@@ -1,3 +1,5 @@
+
+
 package com.op.banktransactiontracker.sms
 
 import android.app.NotificationManager
@@ -19,6 +21,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val body = intent.getStringExtra(SmsReceiver.EXTRA_BODY) ?: return
         val phone = intent.getStringExtra(SmsReceiver.EXTRA_PHONE) ?: sender
         val notificationId = intent.getIntExtra(SmsReceiver.EXTRA_NOTIFICATION_ID, -1)
+        val type = intent.getStringExtra(SmsReceiver.EXTRA_TYPE) ?: "withdrawal"
+        val amount = intent.getLongExtra(SmsReceiver.EXTRA_AMOUNT, 0L)
 
         val title: String
         val description: String
@@ -41,7 +45,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
             else -> return
         }
 
-        // ذخیره در دیتابیس
         CoroutineScope(Dispatchers.IO).launch {
             val dao = AppDatabase.getDatabase(context).transactionDao()
             val repository = TransactionRepository(dao)
@@ -52,12 +55,13 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 phoneNumber = phone,
                 messageBody = body,
                 title = title,
-                description = description
+                description = description,
+                type = type,
+                amount = amount
             )
             repository.insert(transaction)
         }
 
-        // حذف نوتیفیکیشن
         if (notificationId != -1) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.cancel(notificationId)

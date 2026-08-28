@@ -12,5 +12,7 @@ data class TransactionEntity(
     val phoneNumber: String,            // شماره فرستنده
     val messageBody: String,            // متن کامل پیامک
     val title: String,                  // عنوان انتخاب‌شده (سایر / لغو / متن ریپلای)
-    val description: String             // توضیحات کاربر (قابل ویرایش)
+    val description: String,            // توضیحات کاربر (قابل ویرایش)
+    val type: String = "withdrawal",    // "withdrawal" یا "deposit"
+    val amount: Long = 0                // مبلغ عددی برای محاسبه مجموع
 )

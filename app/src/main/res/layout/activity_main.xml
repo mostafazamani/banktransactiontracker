@@ -20,7 +20,6 @@
             android:background="?attr/colorPrimary"
             app:title="تراکنش ‌بان"
             app:titleTextColor="@android:color/white"
-
             app:menu="@menu/menu_main" />
 
     </com.google.android.material.appbar.AppBarLayout>
@@ -90,6 +89,47 @@
                     android:visibility="gone" />
             </LinearLayout>
         </HorizontalScrollView>
+
+        <!-- مجموع واریز و برداشت -->
+        <LinearLayout
+            android:id="@+id/layoutTotals"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/tvTotalDeposit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#2E7D32"
+                android:background="#E8F5E9"
+                android:padding="10dp"
+                tools:text="واریز: ۰ ریال" />
+
+            <View
+                android:layout_width="8dp"
+                android:layout_height="1dp" />
+
+            <TextView
+                android:id="@+id/tvTotalWithdrawal"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#C62828"
+                android:background="#FFEBEE"
+                android:padding="10dp"
+                tools:text="برداشت: ۰ ریال" />
+        </LinearLayout>
 
         <!-- لیست -->
         <androidx.recyclerview.widget.RecyclerView

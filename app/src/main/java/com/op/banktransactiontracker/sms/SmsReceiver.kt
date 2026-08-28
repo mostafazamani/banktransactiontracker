@@ -1,3 +1,4 @@
+
 package com.op.banktransactiontracker.sms
 
 import android.app.NotificationChannel
@@ -32,7 +33,15 @@ class SmsReceiver : BroadcastReceiver() {
         const val EXTRA_BODY = "extra_body"
         const val EXTRA_PHONE = "extra_phone"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
+        const val EXTRA_TYPE = "extra_type"           // "withdrawal" یا "deposit"
+        const val EXTRA_AMOUNT = "extra_amount"       // مبلغ عددی
     }
+
+    data class ExtractedAmount(
+        val amountText: String,
+        val amountValue: Long,
+        val type: String   // "withdrawal" یا "deposit"
+    )
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
@@ -40,7 +49,6 @@ class SmsReceiver : BroadcastReceiver() {
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
         if (messages.isEmpty()) return
 
-        // ترکیب پیام‌های چندبخشی
         val body = StringBuilder()
         var sender = ""
         for (msg in messages) {
@@ -51,25 +59,30 @@ class SmsReceiver : BroadcastReceiver() {
         val phoneNumber = sender.trim()
         val messageBody = body.toString().trim()
 
-        // چک کردن اینکه شماره در لیست ذخیره شده باشد
         CoroutineScope(Dispatchers.IO).launch {
             val prefs = PhoneNumberPreferences(context)
             val savedNumbers = prefs.phoneNumbersFlow.first()
 
-            // شماره را نرمال‌سازی می‌کنیم (حذف + و فاصله)
             val normalizedIncoming = normalizePhone(phoneNumber)
             val isMatch = savedNumbers.any { saved ->
                 normalizePhone(saved) == normalizedIncoming ||
                         normalizedIncoming.endsWith(normalizePhone(saved)) ||
                         normalizePhone(saved).endsWith(normalizedIncoming)
             }
-           // showNotification(context, phoneNumber, messageBody)
-            if (isMatch) {
-                val sms = extractWithdrawalAmount(messageBody)
-                if (sms!=null){
-                    showNotification(context, phoneNumber," مبلغ : $sms ریال " )
-                }
 
+            if (isMatch) {
+                val extracted = extractAmount(messageBody)
+                if (extracted != null) {
+                    val prefix = if (extracted.type == "deposit") "واریز" else "برداشت"
+                    showNotification(
+                        context,
+                        phoneNumber,
+                        "$prefix : ${extracted.amountText} ریال",
+                        messageBody,
+                        extracted.type,
+                        extracted.amountValue
+                    )
+                }
             }
         }
     }
@@ -81,12 +94,18 @@ class SmsReceiver : BroadcastReceiver() {
             .trim()
     }
 
-    private fun showNotification(context: Context, phone: String, body: String) {
+    private fun showNotification(
+        context: Context,
+        phone: String,
+        displayBody: String,
+        fullMessageBody: String,
+        type: String,
+        amount: Long
+    ) {
         createNotificationChannel(context)
 
         val notificationId = System.currentTimeMillis().toInt()
 
-        // Intent برای باز کردن برنامه
         val contentIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -104,9 +123,11 @@ class SmsReceiver : BroadcastReceiver() {
         val replyIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = ACTION_REPLY
             putExtra(EXTRA_SENDER, phone)
-            putExtra(EXTRA_BODY, body)
+            putExtra(EXTRA_BODY, fullMessageBody)
             putExtra(EXTRA_PHONE, phone)
             putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra(EXTRA_TYPE, type)
+            putExtra(EXTRA_AMOUNT, amount)
         }
         val replyPendingIntent = PendingIntent.getBroadcast(
             context, notificationId + 1, replyIntent,
@@ -126,9 +147,11 @@ class SmsReceiver : BroadcastReceiver() {
         val otherIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = ACTION_OTHER
             putExtra(EXTRA_SENDER, phone)
-            putExtra(EXTRA_BODY, body)
+            putExtra(EXTRA_BODY, fullMessageBody)
             putExtra(EXTRA_PHONE, phone)
             putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra(EXTRA_TYPE, type)
+            putExtra(EXTRA_AMOUNT, amount)
         }
         val otherPendingIntent = PendingIntent.getBroadcast(
             context, notificationId + 2, otherIntent,
@@ -144,9 +167,11 @@ class SmsReceiver : BroadcastReceiver() {
         val cancelIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = ACTION_CANCEL
             putExtra(EXTRA_SENDER, phone)
-            putExtra(EXTRA_BODY, body)
+            putExtra(EXTRA_BODY, fullMessageBody)
             putExtra(EXTRA_PHONE, phone)
             putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra(EXTRA_TYPE, type)
+            putExtra(EXTRA_AMOUNT, amount)
         }
         val cancelPendingIntent = PendingIntent.getBroadcast(
             context, notificationId + 3, cancelIntent,
@@ -158,11 +183,13 @@ class SmsReceiver : BroadcastReceiver() {
             cancelPendingIntent
         ).build()
 
+        val titlePrefix = if (type == "deposit") "واریز" else "برداشت"
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(phone)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentTitle("$titlePrefix - $phone")
+            .setContentText(displayBody)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(fullMessageBody))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
@@ -188,10 +215,9 @@ class SmsReceiver : BroadcastReceiver() {
         }
     }
 
-    fun extractWithdrawalAmount(message: String): String? {
+    fun extractAmount(message: String): ExtractedAmount? {
         if (message.isBlank()) return null
 
-        // نرمال‌سازی متن
         val text = message
             .replace("\r", " ")
             .replace("\n", " ")
@@ -220,46 +246,54 @@ class SmsReceiver : BroadcastReceiver() {
             return null
         }
 
-        // فیلتر پیام‌های خیلی کوتاه که فقط عدد دارند
         val onlyDigitsAndShort = text.replace(Regex("[^0-9]"), "").length in 4..8 && text.length < 80
         if (onlyDigitsAndShort) {
             return null
         }
         // =============================================================
 
-        // اگر فقط واریز باشد و نشانه‌ای از برداشت نباشد → رد کن
-        val hasDeposit = text.contains(Regex("واریز|افزایش موجودی|واریز وجه", RegexOption.IGNORE_CASE))
+        val hasDeposit = text.contains(Regex("واریز|افزایش موجودی|واریز وجه|deposit|credit", RegexOption.IGNORE_CASE))
         val hasWithdrawal = text.contains(Regex("برداشت|خرید|پرداخت|کسر|منفی|debit|خرید شتابی", RegexOption.IGNORE_CASE))
                 || text.contains(Regex("""-\s*[0-9,]{4,}"""))
 
-        if (hasDeposit && !hasWithdrawal) return null
+        // اگر هیچ‌کدام نبود رد کن
+        if (!hasDeposit && !hasWithdrawal) return null
 
-        // ---------------- اولویت ۱: مبلغ منفی ----------------
+        // اولویت با مبلغ منفی → برداشت
         val negativePattern = Pattern.compile("""-\s*([0-9,]{3,})""")
         val negMatcher = negativePattern.matcher(text)
         if (negMatcher.find()) {
-            val amount = negMatcher.group(1)?.trim()
-            if (!amount.isNullOrBlank() && amount.replace(",", "").replace("٬", "").toLongOrNull()?.let { it > 0 } == true) {
-                return amount
+            val amountText = negMatcher.group(1)?.trim()
+            val value = amountText?.replace(",", "")?.replace("٬", "")?.toLongOrNull()
+            if (value != null && value > 0) {
+                return ExtractedAmount(amountText!!, value, "withdrawal")
             }
         }
 
-        // ---------------- اولویت ۲: الگوهای مشخص برداشت ----------------
+        // الگوهای مبلغ
         val patterns = listOf(
             Pattern.compile("""برداشت[:\s]*([0-9,]{3,})""", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("""واریز[:\s]*([0-9,]{3,})""", Pattern.CASE_INSENSITIVE),
             Pattern.compile("""مبلغ[:\s]*([0-9,]{3,})\s*ریال?""", Pattern.CASE_INSENSITIVE),
             Pattern.compile("""(?:خرید|تراکنش|پرداخت)[:\s].*?([0-9,]{4,})""", Pattern.CASE_INSENSITIVE),
-            Pattern.compile("""(?:کسر|منفی)[:\s]*([0-9,]{3,})""", Pattern.CASE_INSENSITIVE)
+            Pattern.compile("""(?:کسر|منفی)[:\s]*([0-9,]{3,})""", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("""(?:افزایش موجودی|واریز وجه)[:\s]*([0-9,]{3,})""", Pattern.CASE_INSENSITIVE)
         )
 
         for (pattern in patterns) {
             val matcher = pattern.matcher(text)
             if (matcher.find()) {
-                val amount = matcher.group(1)?.trim()
-                if (!amount.isNullOrBlank()) {
-                    val numericValue = amount.replace(",", "").replace("٬", "").toLongOrNull()
+                val amountText = matcher.group(1)?.trim()
+                if (!amountText.isNullOrBlank()) {
+                    val numericValue = amountText.replace(",", "").replace("٬", "").toLongOrNull()
                     if (numericValue != null && numericValue > 1000) {
-                        return amount
+                        val type = when {
+                            hasWithdrawal && !hasDeposit -> "withdrawal"
+                            hasDeposit && !hasWithdrawal -> "deposit"
+                            pattern.pattern().contains("واریز") || pattern.pattern().contains("افزایش") -> "deposit"
+                            else -> "withdrawal"
+                        }
+                        return ExtractedAmount(amountText, numericValue, type)
                     }
                 }
             }

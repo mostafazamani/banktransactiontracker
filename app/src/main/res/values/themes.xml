@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.BankTransactionTracker" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryContainer">@color/primary_container</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="android:statusBarColor">@color/primary</item>
+        <item name="android:navigationBarColor">@color/white</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="ToolbarTheme" parent="ThemeOverlay.Material3.Dark.ActionBar">
+        <!-- رنگ متن آیتم‌های منو -->
+        <item name="actionMenuTextColor">#FFFFFF</item>
+
+        <!-- رنگ آیکون‌های منو -->
+        <item name="android:colorControlNormal">#FFFFFF</item>
+        <item name="colorControlNormal">#FFFFFF</item>
+
+        <!-- رنگ آیکون‌ها در حالت active/selected -->
+        <item name="android:colorControlActivated">#FFC107</item>
+        <item name="colorControlActivated">#FFC107</item>
+
+        <!-- رنگ پس‌زمینه منوی بازشو (Popup) -->
+        <item name="android:itemBackground">@color/primary</item>
+        <item name="android:textColor">#FFFFFF</item>
+    </style>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">تراکنش‌بان</string>
+    <string name="search_hint">جست‌وجو در توضیحات و متن پیام...</string>
+    <string name="all_phones">همه شماره‌ها</string>
+    <string name="all_dates">همه تاریخ‌ها</string>
+    <string name="clear_filters">پاک کردن فیلتر</string>
+    <string name="empty_list">هنوز تراکنشی ثبت نشده است</string>
+    <string name="add_manual">افزودن تراکنش دستی</string>
+    <string name="edit">ویرایش</string>
+    <string name="delete">حذف</string>
+    <string name="manage_phones">مدیریت شماره‌ها</string>
+    <string name="request_permissions">درخواست مجوزها</string>
+</resources>

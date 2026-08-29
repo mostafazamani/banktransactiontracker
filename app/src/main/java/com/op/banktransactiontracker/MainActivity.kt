@@ -37,7 +37,7 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: TransactionViewModel by viewModels {
         TransactionViewModelFactory(application)
     }
-
+    private var currentBankList: List<com.op.banktransactiontracker.data.BankEntry> = emptyList()
     private lateinit var transactionAdapter: TransactionAdapter
     private var currentPhoneList: List<String> = emptyList()
     private val numberFormat = NumberFormat.getNumberInstance(Locale("fa"))
@@ -94,7 +94,7 @@ class MainActivity : AppCompatActivity() {
         binding.chipDateFilter.setOnClickListener { showDateFilterDialog() }
         binding.chipClearFilters.setOnClickListener {
             viewModel.clearFilters()
-            binding.chipPhoneFilter.text = "همه شماره‌ها"
+            binding.chipPhoneFilter.text = "همه بانک‌ها"
             binding.chipDateFilter.text = "همه تاریخ‌ها"
             binding.chipClearFilters.visibility = View.GONE
             binding.etSearch.setText("")
@@ -115,8 +115,8 @@ class MainActivity : AppCompatActivity() {
             updateTotals(list)
         }
 
-        viewModel.phoneNumbers.observe(this) { phones ->
-            currentPhoneList = phones.toList().sorted()
+        viewModel.banks.observe(this) { banks ->
+            currentBankList = banks
         }
     }
 
@@ -171,7 +171,6 @@ class MainActivity : AppCompatActivity() {
         if (isEdit) {
             dialogBinding.etPhone.setText(existing!!.phoneNumber)
             dialogBinding.etSenderName.setText(existing.senderName)
-            // در فیلد مبلغ فقط عدد نمایش داده شود
             dialogBinding.etMessage.setText(
                 if (existing.amount > 0) existing.amount.toString() else ""
             )
@@ -203,7 +202,6 @@ class MainActivity : AppCompatActivity() {
                     return@setPositiveButton
                 }
 
-                // انتخاب نوع توسط کاربر
                 val options = arrayOf("واریز", "برداشت")
                 val defaultIndex = if (existing?.type == "deposit") 0 else 1
 
@@ -214,8 +212,6 @@ class MainActivity : AppCompatActivity() {
                         val listView = (dialog as androidx.appcompat.app.AlertDialog).listView
                         val selected = listView.checkedItemPosition
                         val type = if (selected == 0) "deposit" else "withdrawal"
-
-                        // messageBody فقط مبلغ ذخیره شود تا در محاسبات مشکلی نباشد
                         val messageBody = amount.toString()
 
                         if (isEdit) {
@@ -262,18 +258,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPhoneFilterDialog() {
-        val options = mutableListOf("همه شماره‌ها")
-        options.addAll(currentPhoneList)
+        val options = mutableListOf("همه بانک‌ها")
+        options.addAll(currentBankList.map { it.name })
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("فیلتر بر اساس شماره")
+            .setTitle("فیلتر بر اساس بانک")
             .setItems(options.toTypedArray()) { _, which ->
                 if (which == 0) {
-                    viewModel.setPhoneFilter(null)
-                    binding.chipPhoneFilter.text = "همه شماره‌ها"
+                    viewModel.setBankFilter(null)
+                    binding.chipPhoneFilter.text = "همه بانک‌ها"
                 } else {
-                    val selected = currentPhoneList[which - 1]
-                    viewModel.setPhoneFilter(selected)
+                    val selected = currentBankList[which - 1].name
+                    viewModel.setBankFilter(selected)
                     binding.chipPhoneFilter.text = selected
                 }
                 updateClearFilterVisibility()
@@ -347,7 +343,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateClearFilterVisibility() {
-        val hasFilter = viewModel.selectedPhone.value != null ||
+        val hasFilter = viewModel.selectedBank.value != null ||
                 viewModel.fromDate.value != null ||
                 !binding.etSearch.text.isNullOrBlank()
         binding.chipClearFilters.visibility = if (hasFilter) View.VISIBLE else View.GONE
@@ -355,28 +351,85 @@ class MainActivity : AppCompatActivity() {
 
     private fun showManagePhonesDialog() {
         val dialogBinding = DialogManagePhonesBinding.inflate(LayoutInflater.from(this))
-        val phoneAdapter = PhoneAdapter { phone ->
-            viewModel.removePhoneNumber(phone)
-        }
+
+        val phoneAdapter = PhoneAdapter(
+            onRemoveBank = { bank ->
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("حذف بانک")
+                    .setMessage("کل بانک «${bank.name}» و شماره‌هایش حذف شود؟")
+                    .setPositiveButton("بله") { _, _ ->
+                        viewModel.removeBank(bank.name)
+                    }
+                    .setNegativeButton("خیر", null)
+                    .show()
+            },
+            onEditNumber = { bankName, oldNumber ->
+                val input = android.widget.EditText(this).apply {
+                    setText(oldNumber)
+                    setSelection(oldNumber.length)
+                    inputType = android.text.InputType.TYPE_CLASS_PHONE
+                    hint = "شماره جدید"
+                }
+                val padding = (20 * resources.displayMetrics.density).toInt()
+                input.setPadding(padding, padding, padding, padding)
+
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("ویرایش شماره — $bankName")
+                    .setView(input)
+                    .setPositiveButton("ذخیره") { _, _ ->
+                        val newNumber = input.text.toString().trim()
+                        if (newNumber.isNotBlank()) {
+                            viewModel.editNumberInBank(bankName, oldNumber, newNumber)
+                        } else {
+                            Toast.makeText(this, "شماره معتبر نیست", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setNegativeButton("لغو", null)
+                    .show()
+            },
+            onRemoveNumber = { bankName, number ->
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("حذف شماره")
+                    .setMessage("شماره $number از «$bankName» حذف شود؟")
+                    .setPositiveButton("بله") { _, _ ->
+                        viewModel.removeNumberFromBank(bankName, number)
+                    }
+                    .setNegativeButton("خیر", null)
+                    .show()
+            }
+        )
+
         dialogBinding.rvPhones.layoutManager = LinearLayoutManager(this)
         dialogBinding.rvPhones.adapter = phoneAdapter
 
-        viewModel.phoneNumbers.observe(this) { phones ->
-            phoneAdapter.submitList(phones.toList().sorted())
+        viewModel.banks.observe(this) { banks ->
+            phoneAdapter.submitList(banks)
         }
 
         dialogBinding.btnAddPhone.setOnClickListener {
-            val number = dialogBinding.etNewPhone.text.toString().trim()
-            if (number.isNotBlank()) {
-                viewModel.addPhoneNumber(number)
-                dialogBinding.etNewPhone.setText("")
-            } else {
-                Toast.makeText(this, "شماره را وارد کنید", Toast.LENGTH_SHORT).show()
+            val bankName = dialogBinding.etBankName.text.toString().trim()
+            val numbersRaw = dialogBinding.etNewPhone.text.toString().trim()
+            val numbers = numbersRaw
+                .split(",", "،", " ", "\n")
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+
+            if (bankName.isBlank()) {
+                Toast.makeText(this, "نام بانک را وارد کنید", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
+            if (numbers.isEmpty()) {
+                Toast.makeText(this, "حداقل یک شماره وارد کنید", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            viewModel.addBank(bankName, numbers)
+            dialogBinding.etBankName.setText("")
+            dialogBinding.etNewPhone.setText("")
         }
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("مدیریت شماره‌های بانکی")
+            .setTitle("مدیریت بانک‌ها و شماره‌ها")
             .setView(dialogBinding.root)
             .setPositiveButton("بستن", null)
             .show()

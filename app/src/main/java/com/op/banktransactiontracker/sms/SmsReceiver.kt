@@ -61,41 +61,48 @@ class SmsReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             val prefs = PhoneNumberPreferences(context)
-            val savedNumbers = prefs.phoneNumbersFlow.first()
 
-            val normalizedIncoming = normalizePhone(phoneNumber)
-            val isMatch = savedNumbers.any { saved ->
-                normalizePhone(saved) == normalizedIncoming ||
-                        normalizedIncoming.endsWith(normalizePhone(saved)) ||
-                        normalizePhone(saved).endsWith(normalizedIncoming)
-            }
+            // نرمال‌سازی و تطبیق شماره اینجاست (+98 و صفر اول)
+            val bankName = prefs.findBankName(phoneNumber) ?: return@launch
 
-            if (isMatch) {
-                val extracted = extractAmount(messageBody)
-                if (extracted != null) {
-                    val prefix = if (extracted.type == "deposit") "واریز" else "برداشت"
-                    showNotification(
-                        context,
-                        phoneNumber,
-                        "$prefix : ${extracted.amountText} ریال",
-                        messageBody,
-                        extracted.type,
-                        extracted.amountValue
-                    )
-                }
-            }
+            val extracted = extractAmount(messageBody) ?: return@launch
+            val prefix = if (extracted.type == "deposit") "واریز" else "برداشت"
+
+            showNotification(
+                context,
+                bankName,
+                phoneNumber,
+                "$prefix : ${extracted.amountText} ریال",
+                messageBody,
+                extracted.type,
+                extracted.amountValue
+            )
         }
     }
 
     private fun normalizePhone(phone: String): String {
-        return phone.replace("+", "")
+        var p = phone.trim()
             .replace(" ", "")
             .replace("-", "")
-            .trim()
+            .replace("(", "")
+            .replace(")", "")
+
+        when {
+            p.startsWith("+98") -> p = p.removePrefix("+98")
+            p.startsWith("0098") -> p = p.removePrefix("0098")
+            p.startsWith("98") && p.length > 10 -> p = p.removePrefix("98")
+        }
+
+        if (p.startsWith("0") && p.length > 1) {
+            p = p.removePrefix("0")
+        }
+
+        return p
     }
 
     private fun showNotification(
         context: Context,
+        bankName: String,
         phone: String,
         displayBody: String,
         fullMessageBody: String,
@@ -103,7 +110,6 @@ class SmsReceiver : BroadcastReceiver() {
         amount: Long
     ) {
         createNotificationChannel(context)
-
         val notificationId = System.currentTimeMillis().toInt()
 
         val contentIntent = Intent(context, MainActivity::class.java).apply {
@@ -114,80 +120,43 @@ class SmsReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // --- اکشن Reply ---
+        fun baseIntent(action: String, requestCodeOffset: Int, mutable: Boolean): PendingIntent {
+            val intent = Intent(context, NotificationActionReceiver::class.java).apply {
+                this.action = action
+                putExtra(EXTRA_SENDER, bankName)   // نام بانک
+                putExtra(EXTRA_BODY, fullMessageBody)
+                putExtra(EXTRA_PHONE, phone)       // شماره واقعی
+                putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+                putExtra(EXTRA_TYPE, type)
+                putExtra(EXTRA_AMOUNT, amount)
+            }
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                    if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE
+            return PendingIntent.getBroadcast(context, notificationId + requestCodeOffset, intent, flags)
+        }
+
         val replyLabel = "ریپلای"
-        val remoteInput = RemoteInput.Builder(KEY_REPLY)
-            .setLabel(replyLabel)
-            .build()
-
-        val replyIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = ACTION_REPLY
-            putExtra(EXTRA_SENDER, phone)
-            putExtra(EXTRA_BODY, fullMessageBody)
-            putExtra(EXTRA_PHONE, phone)
-            putExtra(EXTRA_NOTIFICATION_ID, notificationId)
-            putExtra(EXTRA_TYPE, type)
-            putExtra(EXTRA_AMOUNT, amount)
-        }
-        val replyPendingIntent = PendingIntent.getBroadcast(
-            context, notificationId + 1, replyIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
-
+        val remoteInput = RemoteInput.Builder(KEY_REPLY).setLabel(replyLabel).build()
+        val replyPendingIntent = baseIntent(ACTION_REPLY, 1, true)
         val replyAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_menu_send,
-            replyLabel,
-            replyPendingIntent
-        )
-            .addRemoteInput(remoteInput)
-            .setAllowGeneratedReplies(true)
-            .build()
+            android.R.drawable.ic_menu_send, replyLabel, replyPendingIntent
+        ).addRemoteInput(remoteInput).setAllowGeneratedReplies(true).build()
 
-        // --- اکشن سایر ---
-        val otherIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = ACTION_OTHER
-            putExtra(EXTRA_SENDER, phone)
-            putExtra(EXTRA_BODY, fullMessageBody)
-            putExtra(EXTRA_PHONE, phone)
-            putExtra(EXTRA_NOTIFICATION_ID, notificationId)
-            putExtra(EXTRA_TYPE, type)
-            putExtra(EXTRA_AMOUNT, amount)
-        }
-        val otherPendingIntent = PendingIntent.getBroadcast(
-            context, notificationId + 2, otherIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
         val otherAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_menu_edit,
-            "بعدا ثبت شود",
-            otherPendingIntent
+            android.R.drawable.ic_menu_edit, "بعدا ثبت شود",
+            baseIntent(ACTION_OTHER, 2, false)
         ).build()
 
-        // --- اکشن لغو ---
-        val cancelIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = ACTION_CANCEL
-            putExtra(EXTRA_SENDER, phone)
-            putExtra(EXTRA_BODY, fullMessageBody)
-            putExtra(EXTRA_PHONE, phone)
-            putExtra(EXTRA_NOTIFICATION_ID, notificationId)
-            putExtra(EXTRA_TYPE, type)
-            putExtra(EXTRA_AMOUNT, amount)
-        }
-        val cancelPendingIntent = PendingIntent.getBroadcast(
-            context, notificationId + 3, cancelIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
         val cancelAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_menu_close_clear_cancel,
-            "لغو",
-            cancelPendingIntent
+            android.R.drawable.ic_menu_close_clear_cancel, "لغو",
+            baseIntent(ACTION_CANCEL, 3, false)
         ).build()
 
         val titlePrefix = if (type == "deposit") "واریز" else "برداشت"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("$titlePrefix - $phone")
+            .setContentTitle("$titlePrefix - $bankName")
             .setContentText(displayBody)
             .setStyle(NotificationCompat.BigTextStyle().bigText(fullMessageBody))
             .setPriority(NotificationCompat.PRIORITY_HIGH)

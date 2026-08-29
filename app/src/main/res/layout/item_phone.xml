@@ -2,22 +2,38 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
+    android:orientation="vertical"
     android:padding="10dp">
 
-    <TextView
-        android:id="@+id/tvPhone"
-        android:layout_width="0dp"
+    <!-- هدر بانک -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:textSize="15sp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-    <ImageButton
-        android:id="@+id/btnRemovePhone"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@android:drawable/ic_menu_delete"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="حذف" />
+        <TextView
+            android:id="@+id/tvBankName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textStyle="bold"
+            android:textSize="15sp" />
+
+        <ImageButton
+            android:id="@+id/btnRemoveBank"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@android:drawable/ic_menu_delete"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="حذف کل بانک" />
+    </LinearLayout>
+
+    <!-- لیست شماره‌های این بانک -->
+    <LinearLayout
+        android:id="@+id/layoutNumbers"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="4dp" />
 </LinearLayout>

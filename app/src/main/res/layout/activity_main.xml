@@ -67,7 +67,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_margin="4dp"
-                    android:text="همه شماره‌ها"
+                    android:text="همه بانک‌ها"
                     app:closeIconVisible="false" />
 
                 <com.google.android.material.chip.Chip

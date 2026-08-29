@@ -10,13 +10,28 @@
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="شماره جدید (مثال: 1000 یا +98912...)">
+        android:hint="نام بانک (مثال: بانک ملت)">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etBankName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="شماره‌ها (با کاما جدا کنید)">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/etNewPhone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-             />
+            android:inputType="text"
+            android:maxLines="3" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.button.MaterialButton
@@ -24,12 +39,12 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="افزودن شماره" />
+        android:text="افزودن بانک / شماره‌ها" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvPhones"
         android:layout_width="match_parent"
-        android:layout_height="200dp"
+        android:layout_height="280dp"
         android:layout_marginTop="12dp" />
 
 </LinearLayout>

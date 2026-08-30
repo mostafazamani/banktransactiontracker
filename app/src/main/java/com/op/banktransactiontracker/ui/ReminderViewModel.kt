@@ -1,153 +1,143 @@
 package com.op.banktransactiontracker.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.op.banktransactiontracker.data.ReminderDao
+import com.op.banktransactiontracker.data.AppDatabase
 import com.op.banktransactiontracker.data.ReminderEntity
-import com.op.banktransactiontracker.data.ReminderEntity.ReminderType
 import com.op.banktransactiontracker.data.ReminderRepository
 import com.op.banktransactiontracker.data.ReminderStatus
 import com.op.banktransactiontracker.data.ReminderType
+import com.op.banktransactiontracker.utils.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
-class ReminderViewModel(private val repository: ReminderRepository) : ViewModel() {
+class ReminderViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _reminders = MutableStateFlow<List<ReminderEntity>>(emptyList())
-    val reminders: StateFlow<List<ReminderEntity>> = _reminders
+    private val repository: ReminderRepository
 
-    private val _filteredReminders = MutableStateFlow<List<ReminderEntity>>(emptyList())
-    val filteredReminders: StateFlow<List<ReminderEntity>> = _filteredReminders
+    private val _reminders = MutableLiveData<List<ReminderEntity>>()
+    val reminders: LiveData<List<ReminderEntity>> = _reminders
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery
+    private val _totals = MutableLiveData<Map<ReminderType, Double>>()
+    val totals: LiveData<Map<ReminderType, Double>> = _totals
 
-    private val _selectedType = MutableStateFlow<ReminderType?>(null)
-    val selectedType: StateFlow<ReminderType?> = _selectedType
+    private val _selectedType = MutableLiveData<ReminderType?>(null)
+    private val _startDate = MutableLiveData<LocalDate?>(null)
+    private val _endDate = MutableLiveData<LocalDate?>(null)
+    private val _searchQuery = MutableLiveData<String>("")
 
-    private val _selectedStartDate = MutableStateFlow<LocalDate?>(null)
-    val selectedStartDate: StateFlow<LocalDate?> = _selectedStartDate
-
-    private val _selectedEndDate = MutableStateFlow<LocalDate?>(null)
-    val selectedEndDate: StateFlow<LocalDate?> = _selectedEndDate
-
-    private val _showDatePicker = MutableStateFlow(false)
-    val showDatePicker: StateFlow<Boolean> = _showDatePicker
-
-    private val _currentReminder = MutableStateFlow<ReminderEntity?>(null)
-    val currentReminder: StateFlow<ReminderEntity?> = _currentReminder
-
-    private val _isEditMode = MutableStateFlow(false)
-    val isEditMode: StateFlow<Boolean> = _isEditMode
+    val allTypes = ReminderType.entries
 
     init {
-        loadAllReminders()
+        val dao = AppDatabase.getDatabase(application).reminderDao()
+        repository = ReminderRepository(dao)
+        loadReminders()
     }
 
-    private fun loadAllReminders() {
+    fun loadReminders() {
         viewModelScope.launch(Dispatchers.IO) {
-            val all = repository.getAllActive()
-            _reminders.value = all
-            filterReminders()
+            applyFilters()
+            _totals.postValue(repository.getTotals())
         }
+    }
+
+    private suspend fun applyFilters() {
+        var list = repository.getAllActive()
+
+        val type = _selectedType.value
+        if (type != null) {
+            list = list.filter { it.type == type }
+        }
+
+        val start = _startDate.value
+        val end = _endDate.value
+        if (start != null && end != null) {
+            list = list.filter {
+                !it.reminderDate.isBefore(start) && !it.reminderDate.isAfter(end)
+            }
+        }
+
+        val query = _searchQuery.value?.trim()?.lowercase().orEmpty()
+        if (query.isNotEmpty()) {
+            list = list.filter {
+                (it.bank?.lowercase()?.contains(query) == true) ||
+                        (it.beneficiary?.lowercase()?.contains(query) == true) ||
+                        (it.description?.lowercase()?.contains(query) == true) ||
+                        (it.title?.lowercase()?.contains(query) == true)
+            }
+        }
+
+        _reminders.postValue(list.sortedBy { it.reminderDate })
+    }
+
+    fun setTypeFilter(type: ReminderType?) {
+        _selectedType.value = type
+        loadReminders()
+    }
+
+    fun setDateRange(start: LocalDate?, end: LocalDate?) {
+        _startDate.value = start
+        _endDate.value = end
+        loadReminders()
     }
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-        filterReminders()
+        loadReminders()
     }
 
-    fun setSelectedType(type: ReminderType?) {
-        _selectedType.value = type
-        filterReminders()
+    fun clearFilters() {
+        _selectedType.value = null
+        _startDate.value = null
+        _endDate.value = null
+        _searchQuery.value = ""
+        loadReminders()
     }
 
-    fun setDateRange(start: LocalDate?, end: LocalDate?) {
-        _selectedStartDate.value = start
-        _selectedEndDate.value = end
-        filterReminders()
-    }
-
-    fun openDatePicker() {
-        _showDatePicker.value = true
-    }
-
-    fun closeDatePicker() {
-        _showDatePicker.value = false
-    }
-
-    private fun filterReminders() {
+    fun insertReminder(reminder: ReminderEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            val query = _searchQuery.value.lowercase()
-            val type = _selectedType.value
-            val start = _selectedStartDate.value
-            val end = _selectedEndDate.value
-
-            val filtered = _reminders.value.filter { reminder ->
-                val matchesSearch = query.isEmpty() ||
-                        reminder.title.lowercase().contains(query) ||
-                        (reminder.bank?.lowercase()?.contains(query) == true) ||
-                        (reminder.description?.lowercase()?.contains(query) == true)
-
-                val matchesType = type == null || reminder.type == type
-                val matchesDate = if (start != null && end != null) {
-                    reminder.reminderDate.isAfter(start.minusDays(1)) &&
-                            reminder.reminderDate.isBefore(end.plusDays(1))
-                } else true
-
-                matchesSearch && matchesType && matchesDate
-            }
-
-            _filteredReminders.value = filtered
+            val id = repository.insert(reminder)
+            val withId = reminder.copy(id = id)
+            ReminderScheduler.schedule(getApplication(), withId)
+            loadReminders()
         }
     }
 
-    fun openAddDialog() {
-        _currentReminder.value = null
-        _isEditMode.value = false
-    }
-
-    fun openEditDialog(reminder: ReminderEntity) {
-        _currentReminder.value = reminder
-        _isEditMode.value = true
-    }
-
-    fun setReminder(reminder: ReminderEntity) {
+    fun updateReminder(reminder: ReminderEntity) {
         viewModelScope.launch(Dispatchers.IO) {
-            if (_isEditMode.value) {
-                repository.update(reminder)
-            } else {
-                repository.insert(reminder)
-            }
-            loadAllReminders()
+            repository.update(reminder)
+            ReminderScheduler.schedule(getApplication(), reminder)
+            loadReminders()
         }
     }
 
     fun deleteReminder(reminder: ReminderEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.delete(reminder)
-            loadAllReminders()
+            ReminderScheduler.cancel(getApplication(), reminder.id)
+            loadReminders()
         }
     }
 
-    fun clearFilter() {
-        _searchQuery.value = ""
-        _selectedType.value = null
-        _selectedStartDate.value = null
-        _selectedEndDate.value = null
-        _filteredReminders.value = _reminders.value
+    fun markCompleted(reminder: ReminderEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.update(reminder.copy(status = ReminderStatus.COMPLETED))
+            ReminderScheduler.cancel(getApplication(), reminder.id)
+            loadReminders()
+        }
     }
-
-    // کالکشن‌های آماده برای Spinner
-    val allTypes = ReminderType.entries.toList()
-    val allStatuses = ReminderStatus.entries.toList()
-
-    // برای نمایش تاریخ‌ها
-    fun formatDate(date: LocalDate?): String {
-        return date?.toString() ?: ""
+}
+class ReminderViewModelFactory(private val application: Application) :
+    androidx.lifecycle.ViewModelProvider.Factory {
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ReminderViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ReminderViewModel(application) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

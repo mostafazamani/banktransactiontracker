@@ -24,7 +24,7 @@
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="ویرایش شماره" />
 
-    <ImageButton
+        <ImageButton
         android:id="@+id/btnRemoveNumber"
         android:layout_width="20dp"
         android:layout_height="20dp"

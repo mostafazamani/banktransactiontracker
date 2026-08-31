@@ -11,93 +11,43 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- مجموع مبالغ -->
-        <LinearLayout
-            android:id="@+id/layoutTotals"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="12dp"
-            android:background="#F5F5F5">
-
-            <TextView
-                android:id="@+id/tvTotalCheck"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:textColor="#2196F3"
-                android:padding="4dp"
-                tools:text="💵 چک: ۰ ریال" />
-
-            <TextView
-                android:id="@+id/tvTotalLoan"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:textColor="#4CAF50"
-                android:padding="4dp"
-                tools:text="📅 وام: ۰ ریال" />
-
-            <TextView
-                android:id="@+id/tvTotalDebt"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:textColor="#FF9800"
-                android:padding="4dp"
-                tools:text="⚖️ قرض/بدهی: ۰ ریال" />
-
-            <TextView
-                android:id="@+id/tvTotalOther"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:textColor="#9C27B0"
-                android:padding="4dp"
-                tools:text="📝 سایر: ۰ ریال" />
-        </LinearLayout>
-
-        <!-- جستجو -->
         <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/searchLayout"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="12dp"
-            android:layout_marginTop="8dp"
-            android:hint="جستجو...">
+            android:layout_margin="12dp"
+            android:hint="جست‌وجو در توضیحات و متن پیام...">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etSearch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="text"
+                android:imeOptions="actionSearch"
                 android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- فیلترها -->
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:scrollbars="none"
-            android:paddingHorizontal="8dp"
-            android:layout_marginTop="4dp">
+            android:paddingHorizontal="8dp">
 
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
                 <com.google.android.material.chip.Chip
-                    android:id="@+id/chipTypeFilter"
+                    android:id="@+id/chipPhoneFilter"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_margin="4dp"
-                    android:text="همه انواع" />
+                    android:text="همه بانک‌ها"
+                    app:closeIconVisible="false" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipDateFilter"
@@ -105,7 +55,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_margin="4dp"
-                    android:text="همه تاریخ‌ها" />
+                    android:text="همه تاریخ‌ها"
+                    app:closeIconVisible="false" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipClearFilters"
@@ -118,15 +69,54 @@
             </LinearLayout>
         </HorizontalScrollView>
 
-        <!-- لیست -->
+        <LinearLayout
+            android:id="@+id/layoutTotals"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/tvTotalDeposit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#2E7D32"
+                android:background="#E8F5E9"
+                android:padding="10dp"
+                tools:text="واریز: ۰ ریال" />
+
+            <View
+                android:layout_width="8dp"
+                android:layout_height="1dp" />
+
+            <TextView
+                android:id="@+id/tvTotalWithdrawal"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#C62828"
+                android:background="#FFEBEE"
+                android:padding="10dp"
+                tools:text="برداشت: ۰ ریال" />
+        </LinearLayout>
+
         <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rvList"
+            android:id="@+id/recyclerView"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:clipToPadding="false"
             android:padding="8dp"
-            tools:listitem="@layout/item_reminder" />
+            tools:listitem="@layout/item_transaction" />
 
         <TextView
             android:id="@+id/tvEmpty"
@@ -134,7 +124,7 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="هنوز یادآوری ثبت نشده است"
+            android:text="هنوز تراکنشی ثبت نشده است"
             android:textSize="16sp"
             android:visibility="gone" />
     </LinearLayout>
@@ -145,7 +135,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
-        android:contentDescription="افزودن یادآوری"
+        android:contentDescription="افزودن تراکنش دستی"
         app:srcCompat="@android:drawable/ic_input_add"
         app:tint="@android:color/white" />
 

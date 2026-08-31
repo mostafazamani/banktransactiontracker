@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"
@@ -45,6 +47,18 @@
         <receiver
             android:name=".sms.NotificationActionReceiver"
             android:exported="false" />
+
+        <receiver
+            android:name=".sms.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="com.op.banktransactiontracker.ACTION_REMIND" />
+                <action android:name="com.op.banktransactiontracker.ACTION_REMIND_AGAIN" />
+                <action android:name="com.op.banktransactiontracker.ACTION_NO_MORE_REMIND" />
+                <action android:name="com.op.banktransactiontracker.ACTION_DONE" />
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>

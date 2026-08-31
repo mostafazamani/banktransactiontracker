@@ -9,40 +9,26 @@ data class ReminderEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    val type: ReminderType,
-
-    // مشترک
-    val amount: Double,
-    val reminderDate: LocalDate,          // تاریخ هدف (چک / قسط / تسویه / سایر)
+    val type: ReminderType,                      // نوع یادآوری
+    val title: String = "",                      // عنوان (برای OTHER و نمایش)
+    val bank: String? = null,                    // نام بانک (چک / وام)
+    val beneficiary: String? = null,             // ذینفع چک
+    val amount: Double,                          // مبلغ اصلی
+    val checkDate: LocalDate? = null,            // تاریخ چک / وام (اختیاری)
+    val installmentAmount: Double? = null,       // مبلغ هر قسط (وام)
+    val remainingInstallments: Int? = null,      // تعداد اقساط باقی‌مانده (وام)
+    val debtDate: LocalDate? = null,             // تاریخ گرفتن قرض
+    val description: String? = null,             // توضیحات قرض/بدهی
+    val reminderDate: LocalDate,                 // تاریخ یادآوری (تاریخ چک / قسط / تسویه / سایر)
     val status: ReminderStatus = ReminderStatus.ACTIVE,
-    val remindDaily: Boolean = true,      // آیا روزانه یادآوری شود؟
-    val lastNotifiedDate: LocalDate? = null,
-
-    // چک
-    val bank: String? = null,
-    val beneficiary: String? = null,      // ذینفع چک
-
-    // وام
-    val installmentAmount: Double? = null,
-    val remainingInstallments: Int? = null,
-
-    // قرض / بدهی
-    val takeDate: LocalDate? = null,      // تاریخ گرفتن قرض
-    val description: String? = null,
-
-    // سایر
-    val title: String? = null
+    val remindDaily: Boolean = true,             // آیا روزانه یادآوری شود؟
+    val lastNotifiedDate: LocalDate? = null      // آخرین روزی که نوتیف فرستاده شده
 )
 
 enum class ReminderType {
-    CHECK,      // چک
-    LOAN,       // وام
-    DEBT,       // قرض و بدهی
-    OTHER       // سایر
+    CHECK, LOAN, DEBT, OTHER
 }
 
 enum class ReminderStatus {
-    ACTIVE,
-    COMPLETED,
-    CANCELLED
+    ACTIVE, COMPLETED, DELETED
 }

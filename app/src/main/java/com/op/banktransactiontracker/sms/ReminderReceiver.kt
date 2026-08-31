@@ -15,6 +15,7 @@ import com.op.banktransactiontracker.data.ReminderEntity
 import com.op.banktransactiontracker.data.ReminderRepository
 import com.op.banktransactiontracker.data.ReminderStatus
 import com.op.banktransactiontracker.data.ReminderType
+import com.op.banktransactiontracker.utils.DateUtils
 import com.op.banktransactiontracker.utils.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,8 +62,12 @@ class ReminderReceiver : BroadcastReceiver() {
 
             showNotification(context, reminder, isLastDay)
 
-            // آپدیت آخرین روز نوتیف
             repo.update(reminder.copy(lastNotifiedDate = today))
+
+            // اگر روزانه است و هنوز به روز آخر نرسیده‌ایم، فردا را schedule کن
+            if (reminder.remindDaily && !isLastDay) {
+                ReminderScheduler.scheduleNextDay(context, reminder)
+            }
         }
     }
 
@@ -76,11 +81,8 @@ class ReminderReceiver : BroadcastReceiver() {
             val repo = ReminderRepository(dao)
             val reminder = repo.getById(reminderId) ?: return@launch
 
-            // مطمئن شو که daily روشن است
             val updated = reminder.copy(remindDaily = true)
             repo.update(updated)
-
-            // فردا دوباره schedule کن
             ReminderScheduler.scheduleNextDay(context, updated)
         }
 
@@ -99,9 +101,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
             val updated = reminder.copy(remindDaily = false)
             repo.update(updated)
-
-            // فقط روز آخر را schedule کن
-            ReminderScheduler.schedule(context, updated)
+            ReminderScheduler.schedule(context, updated) // فقط روز آخر
         }
 
         cancelNotification(context, notificationId)
@@ -128,8 +128,8 @@ class ReminderReceiver : BroadcastReceiver() {
         createChannel(context)
 
         val notificationId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
-        val formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd")
-
+       // val formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd")
+        val dateText = DateUtils.formatLocalDate(reminder.reminderDate)
         val title: String
         val body: String
 
@@ -139,24 +139,24 @@ class ReminderReceiver : BroadcastReceiver() {
                 body = "بانک: ${reminder.bank ?: "-"}\n" +
                         "ذینفع: ${reminder.beneficiary ?: "-"}\n" +
                         "مبلغ: ${String.format("%,.0f", reminder.amount)} ریال\n" +
-                        "تاریخ: ${reminder.reminderDate.format(formatter)}"
+                        "تاریخ: ${dateText}"
             }
             ReminderType.LOAN -> {
                 title = "یادآوری قسط وام"
                 body = "بانک: ${reminder.bank ?: "-"}\n" +
                         "مبلغ قسط: ${String.format("%,.0f", reminder.installmentAmount ?: reminder.amount)} ریال\n" +
-                        "تاریخ: ${reminder.reminderDate.format(formatter)}"
+                        "تاریخ: ${dateText}"
             }
             ReminderType.DEBT -> {
                 title = "یادآوری قرض / بدهی"
                 body = "توضیحات: ${reminder.description ?: "-"}\n" +
                         "مبلغ: ${String.format("%,.0f", reminder.amount)} ریال\n" +
-                        "تاریخ تسویه: ${reminder.reminderDate.format(formatter)}"
+                        "تاریخ تسویه: ${dateText}"
             }
             ReminderType.OTHER -> {
-                title = "یادآوری: ${reminder.title ?: "سایر"}"
+                title = "یادآوری: ${reminder.title.ifBlank { "سایر" }}"
                 body = "مبلغ: ${String.format("%,.0f", reminder.amount)} ریال\n" +
-                        "تاریخ: ${reminder.reminderDate.format(formatter)}"
+                        "تاریخ: ${dateText}"
             }
         }
 
@@ -178,7 +178,6 @@ class ReminderReceiver : BroadcastReceiver() {
             .setContentIntent(contentPending)
 
         if (isLastDay) {
-            // فقط گزینه «انجام شد»
             val doneIntent = Intent(context, ReminderReceiver::class.java).apply {
                 action = ACTION_DONE
                 putExtra(EXTRA_REMINDER_ID, reminder.id)
@@ -190,7 +189,6 @@ class ReminderReceiver : BroadcastReceiver() {
             )
             builder.addAction(0, "انجام شد", donePending)
         } else {
-            // دو گزینه: یادآوری شود + دیگر یادآوری نشود
             val againIntent = Intent(context, ReminderReceiver::class.java).apply {
                 action = ACTION_REMIND_AGAIN
                 putExtra(EXTRA_REMINDER_ID, reminder.id)

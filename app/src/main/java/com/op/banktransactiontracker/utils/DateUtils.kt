@@ -1,5 +1,6 @@
 package com.op.banktransactiontracker.utils
 
+import com.op.banktransactiontracker.utils.DateUtils.fromJalali
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -151,4 +152,46 @@ object DateUtils {
     }
 
     fun toPersianDigits(number: Int): String = toPersianDigits(number.toString())
-}
+
+    fun toEnglishDigits(input: String): String {
+        val persian = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
+        val sb = StringBuilder()
+        for (c in input) {
+            val index = persian.indexOf(c)
+            if (index >= 0) sb.append('0' + index) else sb.append(c)
+        }
+        return sb.toString()
+    }
+
+    /**
+     * پارس تاریخ شمسی (با رقم فارسی یا انگلیسی)
+     * فرمت‌های قابل قبول: ۱۴۰۵/۰۶/۰۹   یا  1405/06/09   یا  1405-06-09
+     * خروجی: LocalDate میلادی  یا  null اگر نامعتبر باشه
+     */
+    fun parseJalaliDate(input: String): LocalDate? {
+        if (input.isBlank()) return null
+
+        val normalized = toEnglishDigits(input.trim())
+            .replace(" ", "")
+            .replace("-", "/")
+            .replace("٫", "/")   // نقطه اعشار فارسی گاهی اشتباهی استفاده می‌شه
+
+        val parts = normalized.split("/")
+        if (parts.size != 3) return null
+
+        val year = parts[0].toIntOrNull() ?: return null
+        val month = parts[1].toIntOrNull() ?: return null
+        val day = parts[2].toIntOrNull() ?: return null
+
+        // اعتبارسنجی ساده
+        if (year < 1300 || year > 1500) return null
+        if (month !in 1..12) return null
+        if (day !in 1..31) return null
+
+        return try {
+            fromJalali(year, month, day)
+        } catch (e: Exception) {
+            null
+        }
+    }
+}/** تبدیل ارقام فارسی به انگلیسی */

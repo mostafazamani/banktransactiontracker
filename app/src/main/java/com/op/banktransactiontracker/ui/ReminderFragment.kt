@@ -256,8 +256,7 @@ class ReminderFragment : Fragment() {
             updateFieldsVisibility(typeIndex)
 
             etAmount.setText(if (existing.amount > 0) existing.amount.toLong().toString() else "")
-            etReminderDate.setText(DateUtils.formatLocalDate(existing.reminderDate))
-            etReminderDate.tag = existing.reminderDate
+            etReminderDate.setText(existing.reminderDate.format(dateFormatter))
 
             when (existing.type) {
                 ReminderType.CHECK -> {
@@ -288,17 +287,15 @@ class ReminderFragment : Fragment() {
 
         // انتخاب تاریخ یادآوری
         etReminderDate.setOnClickListener {
-            showDatePicker(allowPast = false) { date ->
-                etReminderDate.setText(DateUtils.formatLocalDate(date))
-                etReminderDate.tag = date
+            showDatePicker { date ->
+                etReminderDate.setText(date.format(dateFormatter))
             }
         }
 
         // انتخاب تاریخ گرفتن قرض
         etDebtDate.setOnClickListener {
             showDatePicker(allowPast = true) { date ->
-                etDebtDate.setText(DateUtils.formatLocalDate(date))
-                etDebtDate.tag = date
+                etDebtDate.setText(date.format(dateFormatter))
             }
         }
 
